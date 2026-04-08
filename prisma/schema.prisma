@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  balance      Float    @default(0.00)
+  referralCode String   @unique
+  referredBy   String?
+  isAdmin      Boolean  @default(false)
+  isOnline     Boolean  @default(false)
+  lastSeen     DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  investments       Investment[]
+  transactions      Transaction[]
+  sentMessages      ChatMessage[] @relation("SentMessages")
+  receivedMessages  ChatMessage[] @relation("ReceivedMessages")
+  referrals         Referral[]    @relation("Referrer")
+  adminActions      AdminAction[]
+}
+
+model Plan {
+  id          String  @id @default(cuid())
+  name        String
+  returnRate  Float
+  duration    Int
+  minAmount   Float
+  maxAmount   Float
+  investments Investment[]
+}
+
+model Investment {
+  id        String   @id @default(cuid())
+  userId    String
+  planId    String
+  amount    Float
+  profit    Float    @default(0.00)
+  status    String   @default("active")
+  startDate DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  plan      Plan     @relation(fields: [planId], references: [id])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  amount    Float
+  method    String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+}
+
+model Referral {
+  id         String @id @default(cuid())
+  referrerId String
+  referredId String
+  commission Float  @default(0.00)
+  referrer   User   @relation("Referrer", fields: [referrerId], references: [id])
+}
+
+model AdminAction {
+  id        String   @id @default(cuid())
+  adminId   String
+  userId    String
+  action    String
+  amount    Float
+  note      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
