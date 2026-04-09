@@ -1,33 +1,36 @@
-import bcrypt from 'bcryptjs'
-import { supabaseAdmin } from './supabase'
+import NextAuth from 'next-auth'
+import Credentials from 'next-auth/providers/credentials'
+import { getUserByEmail, verifyPassword } from './authHelpers'
 
-export async function hashPassword(password: string) {
-  return bcrypt.hash(password, 12)
-}
-
-export async function verifyPassword(password: string, hash: string) {
-  return bcrypt.compare(password, hash)
-}
-
-export function generateReferralCode(name: string) {
-  const random = Math.random().toString(36).substring(2, 7).toUpperCase()
-  return name.slice(0, 3).toUpperCase() + random
-}
-
-export async function getUserByEmail(email: string) {
-  const { data } = await supabaseAdmin
-    .from('users')
-    .select('*')
-    .eq('email', email)
-    .single()
-  return data
-}
-
-export async function getUserById(id: string) {
-  const { data } = await supabaseAdmin
-    .from('users')
-    .select('*')
-    .eq('id', id)
-    .single()
-  return data
-}
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers: [
+    Credentials({
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null
+        const user = await getUserByEmail(credentials.email as string)
+        if (!user) return null
+        const isValid = await verifyPassword(credentials.password as string, user.password)
+        if (!isValid) return null
+        return { id: user.id, name: user.name, email: user.email, isAdmin: user.is_admin, balance: user.balance }
+      }
+    })
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) { token.id = user.id; token.isAdmin = (user as any).isAdmin; token.balance = (user as any).balance }
+      return token
+    },
+    async session({ session, token }) {
+      session.user.id = token.id as string
+      session.user.isAdmin = token.isAdmin as boolean
+      session.user.balance = token.balance as number
+      return session
+    }
+  },
+  pages: { signIn: '/user/login' },
+  secret: process.env.NEXTAUTH_SECRET,
+})
