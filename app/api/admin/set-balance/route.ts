@@ -11,20 +11,27 @@ export async function POST(req: Request) {
   if (!adminId || !isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: cors })
   const { userId, amount, action, note } = await req.json()
 
-  const { data: user } = await supabaseAdmin.from('users').select('deposit_balance, interest_balance').eq('id', userId).single()
+  const { data: user } = await supabaseAdmin.from('users').select('deposit_balance,interest_balance,invest_balance').eq('id', userId).single()
+
+  let updateData: any = {}
 
   if (action === 'set') {
-    // Set = deposit balance
-    const newDeposit = amount
-    const total = newDeposit + (user?.interest_balance || 0)
-    await supabaseAdmin.from('users').update({ deposit_balance: newDeposit, balance: total }).eq('id', userId)
-  } else {
-    // Boost = interest balance
-    const newInterest = (user?.interest_balance || 0) + amount
-    const total = (user?.deposit_balance || 0) + newInterest
-    await supabaseAdmin.from('users').update({ interest_balance: newInterest, balance: total }).eq('id', userId)
+    // Deposit wallet
+    updateData = { deposit_balance: amount }
+  } else if (action === 'boost') {
+    // Interest wallet
+    updateData = { interest_balance: (user?.interest_balance || 0) + amount }
+  } else if (action === 'invest') {
+    // Total invest
+    updateData = { invest_balance: (user?.invest_balance || 0) + amount }
   }
 
+  // Update total balance = deposit + interest
+  const dep = action === 'set' ? amount : (user?.deposit_balance || 0)
+  const int = action === 'boost' ? (user?.interest_balance || 0) + amount : (user?.interest_balance || 0)
+  updateData.balance = dep + int
+
+  await supabaseAdmin.from('users').update(updateData).eq('id', userId)
   await supabaseAdmin.from('admin_actions').insert({ admin_id: adminId, user_id: userId, action, amount, note: note || '' })
   return NextResponse.json({ success: true }, { headers: cors })
 }
